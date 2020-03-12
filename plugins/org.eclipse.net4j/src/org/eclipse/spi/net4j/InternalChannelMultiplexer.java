@@ -43,4 +43,6 @@ public interface InternalChannelMultiplexer extends IChannelMultiplexer, IBuffer
    * @since 2.0
    */
   public void closeChannel(InternalChannel channel);
+
+  public void inverseClose();
 }

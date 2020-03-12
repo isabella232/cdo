@@ -10,7 +10,8 @@
  */
 package org.eclipse.net4j.tests;
 
-import org.eclipse.net4j.tests.bugzilla.Bugzilla_241463_Test;
+import org.eclipse.net4j.tests.config.Net4jTestSuite;
+import org.eclipse.net4j.tests.config.TestConfig.SSL;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -22,16 +23,9 @@ public class AllSSLTests
 {
   public static Test suite()
   {
-    TestSuite suite = new TestSuite("Tests for SSL Net4j"); //$NON-NLS-1$
-    suite.addTestSuite(ChannelTest.SSL.class);
-    suite.addTestSuite(TCPConnectorTest.SSL.class);
-    suite.addTestSuite(TransportTest.SSL.class);
-    suite.addTestSuite(SignalTest.SSL.class);
-    suite.addTestSuite(SignalMonitorTest.SSL.class);
-    suite.addTestSuite(ExceptionTest.SSL.class);
-    // Bugzillas
-    suite.addTestSuite(Bugzilla_241463_Test.SSL.class);
-
+    @SuppressWarnings("unchecked")
+    TestSuite suite = new Net4jTestSuite(AllTests.class.getName(), SSL.class);
+    AllTests.populateSuite(suite);
     return suite;
   }
 }

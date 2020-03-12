@@ -13,17 +13,19 @@ package org.eclipse.net4j.tests;
 
 import org.eclipse.net4j.ITransportConfigAware;
 import org.eclipse.net4j.channel.IChannel;
+import org.eclipse.net4j.connector.IConnector;
+import org.eclipse.net4j.tests.config.AbstractConfigTest;
 import org.eclipse.net4j.tests.data.HugeData;
 import org.eclipse.net4j.tests.data.TinyData;
 import org.eclipse.net4j.tests.signal.ArrayRequest;
 import org.eclipse.net4j.tests.signal.TestSignalProtocol;
-import org.eclipse.net4j.util.concurrent.ConcurrencyUtil;
 import org.eclipse.net4j.util.concurrent.MonitoredThread;
 import org.eclipse.net4j.util.concurrent.MonitoredThread.MultiThreadMonitor;
 import org.eclipse.net4j.util.io.IOUtil;
 import org.eclipse.net4j.util.lifecycle.ILifecycle;
 import org.eclipse.net4j.util.lifecycle.LifecycleEventAdapter;
 
+import org.eclipse.spi.net4j.InternalChannel;
 import org.eclipse.spi.net4j.InternalConnector;
 
 import java.util.ArrayList;
@@ -36,7 +38,7 @@ import java.util.Set;
 /**
  * @author Eike Stepper
  */
-public abstract class ChannelTest extends AbstractProtocolTest
+public class ChannelTest extends AbstractConfigTest
 {
   private static final long TIMEOUT = 20000;
 
@@ -55,8 +57,10 @@ public abstract class ChannelTest extends AbstractProtocolTest
     TestSignalProtocol protocol = openTestSignalProtocol();
     assertActive(protocol);
 
+    short bufferCapacity = ((ITransportConfigAware)getConnector()).getConfig().getBufferProvider().getBufferCapacity();
+
     byte[] data = HugeData.getBytes();
-    assertEquals(true, data.length > 2 * ((ITransportConfigAware)getConnector()).getConfig().getBufferProvider().getBufferCapacity());
+    assertEquals(true, data.length > 2 * bufferCapacity);
 
     for (int i = 1; i < data.length; i++)
     {
@@ -133,7 +137,7 @@ public abstract class ChannelTest extends AbstractProtocolTest
     disableConsole();
     for (int i = 0; i < 100; i++)
     {
-      IOUtil.OUT().println(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
+      log(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
       testSingleThreadNoData();
     }
   }
@@ -156,9 +160,57 @@ public abstract class ChannelTest extends AbstractProtocolTest
     disableConsole();
     for (int i = 0; i < 100; i++)
     {
-      IOUtil.OUT().println(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
+      log(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
       testSingleThreadTinyData();
     }
+  }
+
+  public void testSingleThreadTinyDataLongWithPause() throws Exception
+  {
+    TestSignalProtocol protocol = openTestSignalProtocol();
+    assertActive(protocol);
+
+    byte[] data = TinyData.getBytes();
+
+    log("Sending 10000 signals...");
+    for (int i = 0; i < 10000; i++)
+    {
+      byte[] result = new ArrayRequest(protocol, data).send();
+      assertEquals(true, Arrays.equals(data, result));
+    }
+
+    log("Pausing 40 seconds ...");
+    sleep(40000); // Pause longer than the 30000 millisecond timeouts.
+
+    log("Sending 10000 signals...");
+    for (int i = 0; i < 10000; i++)
+    {
+      byte[] result = new ArrayRequest(protocol, data).send();
+      assertEquals(true, Arrays.equals(data, result));
+    }
+
+    protocol.close();
+    assertInactive(protocol);
+  }
+
+  public void testSingleThreadHugeDataLong() throws Exception
+  {
+    TestSignalProtocol protocol = openTestSignalProtocol();
+    assertActive(protocol);
+
+    byte[] data = HugeData.getBytes();
+    for (int i = 0; i < 10000; i++)
+    {
+      byte[] result = new ArrayRequest(protocol, data).send();
+      assertEquals(true, Arrays.equals(data, result));
+    }
+
+    InternalChannel channel = (InternalChannel)protocol.getChannel();
+    log("Sent buffers: " + channel.getSentBuffers());
+    log("Received buffers: " + channel.getReceivedBuffers());
+
+    protocol.close();
+    assertInactive(protocol);
   }
 
   public void testMultiThreadNoData() throws Exception
@@ -173,7 +225,7 @@ public abstract class ChannelTest extends AbstractProtocolTest
         {
           for (int i = 0; i < 100; i++)
           {
-            IOUtil.OUT().println(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
+            log(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
             TestSignalProtocol protocol = openTestSignalProtocol();
             assertActive(protocol);
 
@@ -203,7 +255,7 @@ public abstract class ChannelTest extends AbstractProtocolTest
         {
           for (int i = 0; i < 100; i++)
           {
-            IOUtil.OUT().println(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
+            log(Thread.currentThread().getName() + ": " + i); //$NON-NLS-1$
             TestSignalProtocol protocol = openTestSignalProtocol();
             assertActive(protocol);
             heartBeat();
@@ -228,7 +280,7 @@ public abstract class ChannelTest extends AbstractProtocolTest
 
   public void testMultiThreadDataLoop() throws Exception
   {
-    MultiThreadMonitor threadMonitor = new MultiThreadMonitor(TIMEOUT, 10L);
+    MultiThreadMonitor threadMonitor = new MultiThreadMonitor(1000 * TIMEOUT, 10L);
     for (int i = 0; i < THREADS; i++)
     {
       threadMonitor.addThread(new MonitoredThread("TEST-THREAD-" + i, threadMonitor) //$NON-NLS-1$
@@ -249,13 +301,12 @@ public abstract class ChannelTest extends AbstractProtocolTest
               assertEquals(true, Arrays.equals(data, result));
 
               heartBeat();
-              ConcurrencyUtil.sleep(10L);
             }
 
             protocol.close();
             assertInactive(protocol);
             long stop = System.currentTimeMillis();
-            IOUtil.OUT().println(Thread.currentThread().getName() + ": " + i + " (" + (stop - start) + ")"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+            log(Thread.currentThread().getName() + ": " + i + " (" + (stop - start) + ")"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
           }
         }
       });
@@ -265,9 +316,6 @@ public abstract class ChannelTest extends AbstractProtocolTest
     threadMonitor.run();
     enableConsole();
   }
-
-  @Override
-  protected abstract boolean useJVMTransport();
 
   @Override
   protected void doSetUp() throws Exception
@@ -281,20 +329,35 @@ public abstract class ChannelTest extends AbstractProtocolTest
   @Override
   protected void doTearDown() throws Exception
   {
-    for (TestSignalProtocol protocol : protocols)
+    try
     {
-      protocol.close();
+      if (protocols != null)
+      {
+        for (TestSignalProtocol protocol : new ArrayList<TestSignalProtocol>(protocols))
+        {
+          protocol.close();
+        }
+
+        protocols = null;
+      }
+
+      if (connector != null)
+      {
+        connector.close();
+        connector = null;
+      }
     }
-
-    protocols = null;
-
-    getConnector().close();
-    super.doTearDown();
+    finally
+    {
+      super.doTearDown();
+    }
   }
 
   private TestSignalProtocol openTestSignalProtocol()
   {
-    final TestSignalProtocol protocol = new TestSignalProtocol(getConnector());
+    IConnector connector = getConnector();
+    final TestSignalProtocol protocol = new TestSignalProtocol(connector);
+
     synchronized (protocols)
     {
       protocols.add(protocol);
@@ -314,6 +377,11 @@ public abstract class ChannelTest extends AbstractProtocolTest
     }
 
     return protocol;
+  }
+
+  private static void log(String message)
+  {
+    IOUtil.OUT().println(message);
   }
 
   /**
@@ -340,60 +408,6 @@ public abstract class ChannelTest extends AbstractProtocolTest
         deactivatedSet.add(lifecycle);
         deactivatedSet.notifyAll();
       }
-    }
-  }
-
-  /**
-   * @author Eike Stepper
-   */
-  public static final class JVM extends ChannelTest
-  {
-    @Override
-    protected boolean useJVMTransport()
-    {
-      return true;
-    }
-
-    @Override
-    protected boolean useSSLTransport()
-    {
-      return false;
-    }
-  }
-
-  /**
-   * @author Eike Stepper
-   */
-  public static final class TCP extends ChannelTest
-  {
-    @Override
-    protected boolean useJVMTransport()
-    {
-      return false;
-    }
-
-    @Override
-    protected boolean useSSLTransport()
-    {
-      return false;
-    }
-  }
-
-  /**
-   * @author Teerawat Chaiyakijpichet (No Magic Asia Ltd.)
-   */
-  public static final class SSL extends ChannelTest
-  {
-    @Override
-    protected boolean useJVMTransport()
-    {
-      return false;
-    }
-
-    @Override
-    protected boolean useSSLTransport()
-    {
-      return true;
     }
   }
 }

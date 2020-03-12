@@ -44,6 +44,12 @@ import java.util.Map;
  */
 public final class CDONet4jUtil
 {
+
+  /**
+   * @since 4.0
+   */
+  public static final String PROTOCOL_JVM = "cdo.net4j.jvm";
+
   /**
    * @since 4.0
    */
@@ -57,7 +63,7 @@ public final class CDONet4jUtil
   /**
    * @since 4.0
    */
-  public static final String PROTOCOL_JVM = "cdo.net4j.jvm";
+  public static final String PROTOCOL_WS = "cdo.net4j.ws";
 
   static
   {
@@ -78,15 +84,21 @@ public final class CDONet4jUtil
           map.put(PROTOCOL_SSL, CDOResourceFactory.INSTANCE);
         }
 
+        if (!map.containsKey(PROTOCOL_WS))
+        {
+          map.put(PROTOCOL_WS, CDOResourceFactory.INSTANCE);
+        }
+
         if (!map.containsKey(PROTOCOL_JVM))
         {
           map.put(PROTOCOL_JVM, CDOResourceFactory.INSTANCE);
         }
 
         int priority = CDOViewProvider.DEFAULT_PRIORITY - 100;
+        CDOViewProviderRegistry.INSTANCE.addViewProvider(new CDONet4jViewProvider.JVM(priority));
         CDOViewProviderRegistry.INSTANCE.addViewProvider(new CDONet4jViewProvider.TCP(priority));
         CDOViewProviderRegistry.INSTANCE.addViewProvider(new CDONet4jViewProvider.SSL(priority));
-        CDOViewProviderRegistry.INSTANCE.addViewProvider(new CDONet4jViewProvider.JVM(priority));
+        CDOViewProviderRegistry.INSTANCE.addViewProvider(new CDONet4jViewProvider.WS(priority));
       }
     }
     catch (RuntimeException ex)

@@ -14,6 +14,7 @@ package org.eclipse.spi.net4j;
 import org.eclipse.net4j.buffer.BufferState;
 import org.eclipse.net4j.buffer.IBuffer;
 import org.eclipse.net4j.buffer.IBufferHandler;
+import org.eclipse.net4j.channel.ChannelException;
 import org.eclipse.net4j.channel.IChannelMultiplexer;
 import org.eclipse.net4j.protocol.IProtocol;
 import org.eclipse.net4j.util.concurrent.ExecutorWorkSerializer;
@@ -187,8 +188,7 @@ public class Channel extends Lifecycle implements InternalChannel, IExecutorServ
     BufferState state = buffer.getState();
     if (state != BufferState.PUTTING)
     {
-      OM.LOG.warn("Ignoring buffer in state == " + state + ": " + this); //$NON-NLS-1$ //$NON-NLS-2$
-      return;
+      throw new ChannelException("Can't send buffer in state == " + state + ": " + this); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
     if (TRACER.isEnabled())

@@ -49,6 +49,8 @@ import java.util.concurrent.ConcurrentMap;
  */
 public abstract class ChannelMultiplexer extends Container<IChannel> implements InternalChannelMultiplexer
 {
+  private static final ThreadLocal<Boolean> INVERSE_CLOSING = new ThreadLocal<Boolean>();
+
   private static final ContextTracer TRACER = new ContextTracer(OM.DEBUG_CONNECTOR, ChannelMultiplexer.class);
 
   private ITransportConfig config;
@@ -216,14 +218,42 @@ public abstract class ChannelMultiplexer extends Container<IChannel> implements 
   public void closeChannel(InternalChannel channel) throws ChannelException
   {
     InternalChannel internalChannel = channel;
-    deregisterChannelFromPeer(internalChannel);
+
+    if (INVERSE_CLOSING.get() == null)
+    {
+      deregisterChannelFromPeer(internalChannel);
+    }
+
     removeChannel(internalChannel);
   }
 
   public void inverseCloseChannel(short channelID) throws ChannelException
   {
     InternalChannel channel = getChannel(channelID);
-    LifecycleUtil.deactivate(channel);
+    INVERSE_CLOSING.set(Boolean.TRUE);
+
+    try
+    {
+      LifecycleUtil.deactivate(channel);
+    }
+    finally
+    {
+      INVERSE_CLOSING.remove();
+    }
+  }
+
+  public void inverseClose()
+  {
+    INVERSE_CLOSING.set(Boolean.TRUE);
+
+    try
+    {
+      LifecycleUtil.deactivateNoisy(this);
+    }
+    finally
+    {
+      INVERSE_CLOSING.remove();
+    }
   }
 
   protected InternalChannel createChannel()

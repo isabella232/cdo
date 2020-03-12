@@ -29,6 +29,10 @@ import org.eclipse.net4j.internal.tcp.ssl.SSLConnectorFactory;
 import org.eclipse.net4j.tcp.ITCPSelector;
 import org.eclipse.net4j.tcp.TCPUtil;
 import org.eclipse.net4j.tests.bundle.OM;
+import org.eclipse.net4j.tests.config.AbstractConfigTest;
+import org.eclipse.net4j.tests.config.Net4jTestSuite.ExcludedConfig;
+import org.eclipse.net4j.tests.config.TestConfig.JVM;
+import org.eclipse.net4j.tests.config.TestConfig.WS;
 import org.eclipse.net4j.util.collection.RoundRobinBlockingQueue;
 import org.eclipse.net4j.util.concurrent.ConcurrencyUtil;
 import org.eclipse.net4j.util.concurrent.ThreadPool;
@@ -53,7 +57,8 @@ import java.util.concurrent.ExecutorService;
  * @author Eike Stepper
  * @author Teerawat Chaiyakijpichet (No Magic Asia Ltd.)
  */
-public class TCPConnectorTest extends AbstractTransportTest
+@ExcludedConfig({ JVM.class, WS.class })
+public class TCPConnectorTest extends AbstractConfigTest
 {
   private static final int TIMEOUT = 10000;
 
@@ -165,22 +170,22 @@ public class TCPConnectorTest extends AbstractTransportTest
   {
     selector = new TCPSelector();
 
-    if (useSSLTransport())
+    if ("SSL".equals(config.toString()))
     {
       acceptor = new SSLAcceptor();
-      container.putElement(SSLAcceptorFactory.PRODUCT_GROUP, SSLAcceptorFactory.TYPE, null, acceptor);
+      acceptorContainer.putElement(SSLAcceptorFactory.PRODUCT_GROUP, SSLAcceptorFactory.TYPE, null, acceptor);
 
       // cannot use same container with the acceptor.
       connector = new SSLClientConnector();
-      separateContainer.putElement(SSLConnectorFactory.PRODUCT_GROUP, SSLConnectorFactory.TYPE, null, acceptor);
+      connectorContainer.putElement(SSLConnectorFactory.PRODUCT_GROUP, SSLConnectorFactory.TYPE, null, acceptor);
     }
     else
     {
       acceptor = new TCPAcceptor();
-      container.putElement(TCPAcceptorFactory.PRODUCT_GROUP, TCPUtil.FACTORY_TYPE, null, acceptor);
+      acceptorContainer.putElement(TCPAcceptorFactory.PRODUCT_GROUP, TCPUtil.FACTORY_TYPE, null, acceptor);
 
       connector = new TCPClientConnector();
-      container.putElement(TCPConnectorFactory.PRODUCT_GROUP, TCPConnectorFactory.TYPE, null, acceptor);
+      connectorContainer.putElement(TCPConnectorFactory.PRODUCT_GROUP, TCPConnectorFactory.TYPE, null, acceptor);
     }
   }
 
@@ -188,7 +193,7 @@ public class TCPConnectorTest extends AbstractTransportTest
   {
     selector = new TCPSelector();
 
-    if (useSSLTransport())
+    if ("SSL".equals(config.toString()))
     {
       acceptor = new SSLAcceptor()
       {
@@ -586,41 +591,5 @@ public class TCPConnectorTest extends AbstractTransportTest
     assertEquals(true, queue.isEmpty());
     assertNull(queue.peek());
     assertNull(queue.poll());
-  }
-
-  /**
-   * @author Teerawat Chaiyakijpichet (No Magic Asia Ltd.)
-   */
-  public static final class TCP extends TCPConnectorTest
-  {
-    @Override
-    protected boolean useJVMTransport()
-    {
-      return false;
-    }
-
-    @Override
-    protected boolean useSSLTransport()
-    {
-      return false;
-    }
-  }
-
-  /**
-   * @author Teerawat Chaiyakijpichet (No Magic Asia Ltd.)
-   */
-  public static final class SSL extends TCPConnectorTest
-  {
-    @Override
-    protected boolean useJVMTransport()
-    {
-      return false;
-    }
-
-    @Override
-    protected boolean useSSLTransport()
-    {
-      return true;
-    }
   }
 }

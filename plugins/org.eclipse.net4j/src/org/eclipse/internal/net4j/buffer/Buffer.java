@@ -54,13 +54,13 @@ public class Buffer implements InternalBuffer
 
   private IBufferProvider bufferProvider;
 
-  private short channelID;
-
-  private byte flags;
+  private ByteBuffer byteBuffer;
 
   private BufferState state = BufferState.INITIAL;
 
-  private ByteBuffer byteBuffer;
+  private short channelID;
+
+  private byte flags;
 
   public Buffer(IBufferProvider provider, short capacity)
   {
@@ -162,7 +162,7 @@ public class Buffer implements InternalBuffer
     state = BufferState.INITIAL;
     channelID = NO_CHANNEL;
     flags = 0;
-    byteBuffer.clear();
+    ((java.nio.Buffer)byteBuffer).clear();
   }
 
   public void release()
@@ -196,7 +196,7 @@ public class Buffer implements InternalBuffer
 
       if (state == BufferState.INITIAL)
       {
-        byteBuffer.limit(IBuffer.HEADER_SIZE);
+        ((java.nio.Buffer)byteBuffer).limit(IBuffer.HEADER_SIZE);
         state = BufferState.READING_HEADER;
       }
 
@@ -208,7 +208,7 @@ public class Buffer implements InternalBuffer
           return null;
         }
 
-        byteBuffer.flip();
+        ((java.nio.Buffer)byteBuffer).flip();
         channelID = byteBuffer.getShort();
         short payloadSize = byteBuffer.getShort();
         if (payloadSize < 0)
@@ -219,11 +219,11 @@ public class Buffer implements InternalBuffer
 
         payloadSize -= MAKE_PAYLOAD_SIZE_NON_ZERO;
 
-        byteBuffer.clear();
+        ((java.nio.Buffer)byteBuffer).clear();
 
         try
         {
-          byteBuffer.limit(payloadSize);
+          ((java.nio.Buffer)byteBuffer).limit(payloadSize);
         }
         catch (IllegalArgumentException ex)
         {
@@ -256,7 +256,7 @@ public class Buffer implements InternalBuffer
             + (isEOS() ? " (EOS)" : "") + StringUtil.NL + formatContent(false)); //$NON-NLS-1$ //$NON-NLS-2$
       }
 
-      byteBuffer.flip();
+      ((java.nio.Buffer)byteBuffer).flip();
       state = BufferState.GETTING;
       return byteBuffer;
     }
@@ -297,8 +297,8 @@ public class Buffer implements InternalBuffer
         state = BufferState.PUTTING;
         this.channelID = channelID;
 
-        byteBuffer.clear();
-        byteBuffer.position(IBuffer.HEADER_SIZE);
+        ((java.nio.Buffer)byteBuffer).clear();
+        ((java.nio.Buffer)byteBuffer).position(IBuffer.HEADER_SIZE);
       }
 
       return byteBuffer;
@@ -354,10 +354,10 @@ public class Buffer implements InternalBuffer
               + (eos ? " (EOS)" : "") + StringUtil.NL + formatContent(false)); //$NON-NLS-1$ //$NON-NLS-2$
         }
 
-        byteBuffer.flip();
+        ((java.nio.Buffer)byteBuffer).flip();
         byteBuffer.putShort(channelID);
         byteBuffer.putShort((short)payloadSize);
-        byteBuffer.position(0);
+        ((java.nio.Buffer)byteBuffer).position(0);
         state = BufferState.WRITING;
       }
 
@@ -401,8 +401,8 @@ public class Buffer implements InternalBuffer
         throw new IllegalStateException(toString());
       }
 
-      byteBuffer.flip();
-      byteBuffer.position(IBuffer.HEADER_SIZE);
+      ((java.nio.Buffer)byteBuffer).flip();
+      ((java.nio.Buffer)byteBuffer).position(IBuffer.HEADER_SIZE);
       state = BufferState.GETTING;
     }
     catch (RuntimeException ex)
@@ -429,7 +429,7 @@ public class Buffer implements InternalBuffer
 
   public void setPosition(int position)
   {
-    byteBuffer.position(position);
+    ((java.nio.Buffer)byteBuffer).position(position);
   }
 
   public int getLimit()
@@ -439,7 +439,7 @@ public class Buffer implements InternalBuffer
 
   public void setLimit(int limit)
   {
-    byteBuffer.limit(limit);
+    ((java.nio.Buffer)byteBuffer).limit(limit);
   }
 
   public boolean hasRemaining()
@@ -503,12 +503,12 @@ public class Buffer implements InternalBuffer
     {
       if (state != BufferState.GETTING)
       {
-        byteBuffer.flip();
+        ((java.nio.Buffer)byteBuffer).flip();
       }
 
       if (state == BufferState.PUTTING && !showHeader)
       {
-        byteBuffer.position(IBuffer.HEADER_SIZE);
+        ((java.nio.Buffer)byteBuffer).position(IBuffer.HEADER_SIZE);
       }
 
       StringBuilder builder = new StringBuilder();
@@ -523,8 +523,8 @@ public class Buffer implements InternalBuffer
     }
     finally
     {
-      byteBuffer.position(oldPosition);
-      byteBuffer.limit(oldLimit);
+      ((java.nio.Buffer)byteBuffer).position(oldPosition);
+      ((java.nio.Buffer)byteBuffer).limit(oldLimit);
     }
   }
 
@@ -632,6 +632,22 @@ public class Buffer implements InternalBuffer
     System.out.println("correlationID: " + correlationID);
     System.out.println("type:          " + type);
     System.out.println();
+  }
+
+  public static String dump(ByteBuffer byteBuffer)
+  {
+    final int position = byteBuffer.position();
+    final int limit = byteBuffer.limit();
+
+    StringBuilder builder = new StringBuilder();
+    for (int i = 0; i < limit; i++)
+    {
+      byte b = byteBuffer.get(i);
+      builder.append(' ');
+      builder.append(Byte.toString(b));
+    }
+
+    return "pos " + position + "/" + limit + ":" + builder;
   }
 
   public static void main(String[] args) throws Exception

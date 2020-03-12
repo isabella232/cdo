@@ -89,6 +89,10 @@ public interface IBuffer
 
   public static final short HEADER_SIZE = 4;
 
+  public static final int CHANNEL_ID_POS = 0;
+
+  public static final int PAYLOAD_SIZE_POS = Short.BYTES;
+
   /**
    * Returns the {@link IBufferProvider} that has provided this buffer and that this buffer will be returned to when its
    * {@link #release()} method is called.
