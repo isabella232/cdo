@@ -178,8 +178,6 @@ public class WSClientConnector extends WSConnector
 
     Future<Session> result = client.connect(webSocket, serviceURI, request);
     result.get(connectTimeout, TimeUnit.MILLISECONDS);
-
-    leaveConnecting();
   }
 
   @Override

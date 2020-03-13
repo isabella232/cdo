@@ -222,7 +222,7 @@ public class SecurityTest extends AbstractOMTest
 
             try
             {
-              buffer = queue.poll(20, TimeUnit.MILLISECONDS);
+              buffer = queue.poll(50, TimeUnit.MILLISECONDS);
             }
             catch (InterruptedException ex)
             {

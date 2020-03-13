@@ -40,6 +40,8 @@ public abstract class Acceptor extends Container<IConnector> implements Internal
 
   private ITransportConfig config;
 
+  private ConnectorPreparer connectorPreparer;
+
   private transient IListener connectorListener = new LifecycleEventAdapter()
   {
     @Override
@@ -68,6 +70,16 @@ public abstract class Acceptor extends Container<IConnector> implements Internal
   public synchronized void setConfig(ITransportConfig config)
   {
     this.config = Net4jUtil.copyTransportConfig(this, config);
+  }
+
+  public ConnectorPreparer getConnectorPreparer()
+  {
+    return connectorPreparer;
+  }
+
+  public void setConnectorPreparer(ConnectorPreparer connectorPreparer)
+  {
+    this.connectorPreparer = connectorPreparer;
   }
 
   public INegotiator getNegotiator()
@@ -102,6 +114,11 @@ public abstract class Acceptor extends Container<IConnector> implements Internal
   public void prepareConnector(InternalConnector connector)
   {
     connector.setConfig(getConfig());
+
+    if (connectorPreparer != null)
+    {
+      connectorPreparer.prepareConnector(connector);
+    }
   }
 
   public void addConnector(InternalConnector connector)
@@ -165,5 +182,13 @@ public abstract class Acceptor extends Container<IConnector> implements Internal
     }
 
     super.doDeactivate();
+  }
+
+  /**
+   * @author Eike Stepper
+   */
+  public interface ConnectorPreparer
+  {
+    public void prepareConnector(InternalConnector connector);
   }
 }

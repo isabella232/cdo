@@ -91,8 +91,8 @@ public class Bugzilla_241463_Test extends AbstractConfigTest
             }
           };
 
+          prepareConnector(connector);
           connector.setName(client.getName());
-          connector.setConfig(getConfig());
           connector.activate();
           addConnector(connector);
           return connector;

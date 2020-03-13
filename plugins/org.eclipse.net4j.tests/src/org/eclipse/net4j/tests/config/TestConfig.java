@@ -12,14 +12,28 @@ package org.eclipse.net4j.tests.config;
 
 import org.eclipse.net4j.acceptor.IAcceptor;
 import org.eclipse.net4j.connector.IConnector;
+import org.eclipse.net4j.internal.jvm.JVMAcceptorFactory;
+import org.eclipse.net4j.internal.jvm.JVMConnectorFactory;
+import org.eclipse.net4j.internal.tcp.TCPAcceptorFactory;
 import org.eclipse.net4j.internal.tcp.TCPConnector;
+import org.eclipse.net4j.internal.tcp.TCPConnectorFactory;
+import org.eclipse.net4j.internal.tcp.ssl.SSLAcceptorFactory;
 import org.eclipse.net4j.internal.tcp.ssl.SSLConnector;
+import org.eclipse.net4j.internal.tcp.ssl.SSLConnectorFactory;
+import org.eclipse.net4j.internal.ws.WSAcceptorFactory;
 import org.eclipse.net4j.internal.ws.WSConnector;
+import org.eclipse.net4j.internal.ws.WSConnectorFactory;
+import org.eclipse.net4j.jvm.IJVMAcceptor;
+import org.eclipse.net4j.jvm.IJVMConnector;
 import org.eclipse.net4j.jvm.JVMUtil;
+import org.eclipse.net4j.tcp.ITCPAcceptor;
+import org.eclipse.net4j.tcp.ITCPConnector;
 import org.eclipse.net4j.tcp.TCPUtil;
 import org.eclipse.net4j.tcp.ssl.SSLUtil;
 import org.eclipse.net4j.util.container.IManagedContainer;
 import org.eclipse.net4j.util.io.IOUtil;
+import org.eclipse.net4j.ws.IWSAcceptor;
+import org.eclipse.net4j.ws.IWSConnector;
 import org.eclipse.net4j.ws.WSUtil;
 import org.eclipse.net4j.ws.jetty.Net4jWebSocketServlet;
 
@@ -29,7 +43,6 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
@@ -41,9 +54,19 @@ public abstract class TestConfig
 
   public abstract void prepareContainer(IManagedContainer container);
 
-  public abstract IAcceptor getAcceptor(IManagedContainer container);
+  public IAcceptor getAcceptor(IManagedContainer container)
+  {
+    return getAcceptor(container, true);
+  }
 
-  public abstract IConnector getConnector(IManagedContainer container);
+  public abstract IAcceptor getAcceptor(IManagedContainer container, boolean activate);
+
+  public IConnector getConnector(IManagedContainer container)
+  {
+    return getConnector(container, true);
+  }
+
+  public abstract IConnector getConnector(IManagedContainer container, boolean activate);
 
   public void closeUnderlyingConnection(IConnector connector) throws IOException
   {
@@ -94,15 +117,15 @@ public abstract class TestConfig
         }
 
         @Override
-        public IAcceptor getAcceptor(IManagedContainer container)
+        public IAcceptor getAcceptor(IManagedContainer container, boolean activate)
         {
-          return JVMUtil.getAcceptor(container, NAME);
+          return (IJVMAcceptor)container.getElement(JVMAcceptorFactory.PRODUCT_GROUP, JVMAcceptorFactory.TYPE, NAME, activate);
         }
 
         @Override
-        public IConnector getConnector(IManagedContainer container)
+        public IConnector getConnector(IManagedContainer container, boolean activate)
         {
-          return JVMUtil.getConnector(container, NAME);
+          return (IJVMConnector)container.getElement(JVMConnectorFactory.PRODUCT_GROUP, JVMConnectorFactory.TYPE, NAME, activate);
         }
 
         @Override
@@ -138,15 +161,15 @@ public abstract class TestConfig
         }
 
         @Override
-        public IAcceptor getAcceptor(IManagedContainer container)
+        public IAcceptor getAcceptor(IManagedContainer container, boolean activate)
         {
-          return TCPUtil.getAcceptor(container, null);
+          return (ITCPAcceptor)container.getElement(TCPAcceptorFactory.PRODUCT_GROUP, TCPUtil.FACTORY_TYPE, null, activate);
         }
 
         @Override
-        public IConnector getConnector(IManagedContainer container)
+        public IConnector getConnector(IManagedContainer container, boolean activate)
         {
-          return TCPUtil.getConnector(container, HOST);
+          return (ITCPConnector)container.getElement(TCPConnectorFactory.PRODUCT_GROUP, TCPUtil.FACTORY_TYPE, HOST, activate);
         }
 
         @Override
@@ -197,15 +220,15 @@ public abstract class TestConfig
         }
 
         @Override
-        public IAcceptor getAcceptor(IManagedContainer container)
+        public IAcceptor getAcceptor(IManagedContainer container, boolean activate)
         {
-          return SSLUtil.getAcceptor(container, null);
+          return (ITCPAcceptor)container.getElement(TCPAcceptorFactory.PRODUCT_GROUP, SSLAcceptorFactory.TYPE, null, activate);
         }
 
         @Override
-        public IConnector getConnector(IManagedContainer container)
+        public IConnector getConnector(IManagedContainer container, boolean activate)
         {
-          return SSLUtil.getConnector(container, HOST);
+          return (ITCPConnector)container.getElement(TCPConnectorFactory.PRODUCT_GROUP, SSLConnectorFactory.TYPE, HOST, activate);
         }
 
         @Override
@@ -253,17 +276,18 @@ public abstract class TestConfig
         }
 
         @Override
-        public IAcceptor getAcceptor(IManagedContainer container)
+        public IAcceptor getAcceptor(IManagedContainer container, boolean activate)
         {
-          return WSUtil.getAcceptor(container, ACCEPTOR_NAME);
+          return (IWSAcceptor)container.getElement(WSAcceptorFactory.PRODUCT_GROUP, WSUtil.FACTORY_TYPE, ACCEPTOR_NAME, activate);
         }
 
         @Override
-        public IConnector getConnector(IManagedContainer container)
+        public IConnector getConnector(IManagedContainer container, boolean activate)
         {
           try
           {
-            return WSUtil.getConnector(container, new URI(SERVICE_URI), ACCEPTOR_NAME);
+            String description = WSUtil.getConnectorDescription(SERVICE_URI, ACCEPTOR_NAME);
+            return (IWSConnector)container.getElement(WSConnectorFactory.PRODUCT_GROUP, WSUtil.FACTORY_TYPE, description, activate);
           }
           catch (URISyntaxException ex)
           {

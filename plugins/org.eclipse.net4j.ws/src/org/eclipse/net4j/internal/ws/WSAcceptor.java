@@ -49,7 +49,7 @@ public class WSAcceptor extends Acceptor implements IWSAcceptor
   public WSServerConnector handleAccept(Net4jWebSocket webSocket)
   {
     WSServerConnector connector = createConnector();
-    connector.setConfig(getConfig());
+    prepareConnector(connector);
     connector.setWebSocket(webSocket);
     connector.activate();
     addConnector(connector);

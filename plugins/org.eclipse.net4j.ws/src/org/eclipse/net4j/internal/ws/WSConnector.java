@@ -18,6 +18,7 @@ import org.eclipse.net4j.internal.ws.bundle.OM;
 import org.eclipse.net4j.protocol.IProtocol;
 import org.eclipse.net4j.util.security.INegotiationContext;
 import org.eclipse.net4j.util.security.NegotiationContext;
+import org.eclipse.net4j.util.security.NegotiationException;
 import org.eclipse.net4j.ws.IWSConnector;
 import org.eclipse.net4j.ws.IWSNegotiationContext;
 import org.eclipse.net4j.ws.jetty.Net4jWebSocket;
@@ -50,6 +51,24 @@ public abstract class WSConnector extends Connector implements IWSConnector
   public void setWebSocket(Net4jWebSocket webSocket)
   {
     this.webSocket = webSocket;
+  }
+
+  /**
+   * Override to make the method publicly visible.
+   */
+  @Override
+  public void setNegotiationException(NegotiationException negotiationException)
+  {
+    super.setNegotiationException(negotiationException);
+  }
+
+  /**
+   * Override to make the method publicly visible.
+   */
+  @Override
+  public void leaveConnecting()
+  {
+    super.leaveConnecting();
   }
 
   /**
@@ -151,26 +170,25 @@ public abstract class WSConnector extends Connector implements IWSConnector
     @Override
     public ByteBuffer getBuffer()
     {
-      // buffer = getConfig().getBufferProvider().provideBuffer();
-      // ByteBuffer byteBuffer = buffer.startPutting(ControlChannel.CONTROL_CHANNEL_INDEX);
-      // byteBuffer.put(ControlChannel.OPCODE_NEGOTIATION);
-      // return byteBuffer;
-      return null;
+      buffer = getConfig().getBufferProvider().provideBuffer();
+      ByteBuffer byteBuffer = buffer.startPutting(Net4jWebSocket.CONTROL_CHANNEL_ID);
+      byteBuffer.put(Net4jWebSocket.OPCODE_NEGOTIATION);
+      return byteBuffer;
     }
 
     @Override
     public void transmitBuffer(ByteBuffer byteBuffer)
     {
-      // if (buffer.getByteBuffer() != byteBuffer)
-      // {
-      // throw new IllegalArgumentException("The passed buffer is not the last that was produced"); //$NON-NLS-1$
-      // }
-      //
-      // controlChannel.sendBuffer(buffer);
-      // if (failed)
-      // {
-      // deactivate();
-      // }
+      if (buffer.getByteBuffer() != byteBuffer)
+      {
+        throw new IllegalArgumentException("The passed buffer is not the last that was produced"); //$NON-NLS-1$
+      }
+
+      webSocket.sendBuffer(buffer);
+      if (failed)
+      {
+        deactivate();
+      }
     }
 
     @Override

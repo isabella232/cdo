@@ -12,10 +12,22 @@ package org.eclipse.net4j.tests;
 
 import org.eclipse.net4j.tests.bugzilla.Bugzilla_241463_Test;
 import org.eclipse.net4j.tests.bugzilla.Bugzilla_259086_Test;
+import org.eclipse.net4j.tests.bugzilla.Bugzilla_262875_Test;
 import org.eclipse.net4j.tests.config.Net4jTestSuite;
 import org.eclipse.net4j.tests.config.TestConfig.JVM;
 import org.eclipse.net4j.tests.config.TestConfig.TCP;
 import org.eclipse.net4j.tests.config.TestConfig.WS;
+import org.eclipse.net4j.util.tests.ExecutorWorkSerializerTest;
+import org.eclipse.net4j.util.tests.ExpectedIOTest;
+import org.eclipse.net4j.util.tests.ExtendedIOTest;
+import org.eclipse.net4j.util.tests.MultiMapTest;
+import org.eclipse.net4j.util.tests.RollingLogTest;
+import org.eclipse.net4j.util.tests.RoundRobinBlockingQueueTest;
+import org.eclipse.net4j.util.tests.SecurityTest;
+import org.eclipse.net4j.util.tests.SortedFileMapTest;
+import org.eclipse.net4j.util.tests.StringCompressorTest;
+import org.eclipse.net4j.util.tests.SynchronizingCorrelatorTest;
+import org.eclipse.net4j.util.tests.UUIDGeneratorTest;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -36,22 +48,24 @@ public class AllTests
   static void populateSuite(TestSuite suite)
   {
     // Normal tests
-    // suite.addTestSuite(UUIDGeneratorTest.class);
-    // suite.addTestSuite(MultiMapTest.class);
-    // suite.addTestSuite(SortedFileMapTest.class);
-    // suite.addTestSuite(SynchronizingCorrelatorTest.class);
-    // suite.addTestSuite(BufferPoolTest.class);
-    // suite.addTestSuite(ExtendedIOTest.class);
-    // suite.addTestSuite(StringCompressorTest.class);
-    // suite.addTestSuite(SecurityTest.class);
-    // suite.addTestSuite(ExecutorWorkSerializerTest.class);
-    // suite.addTestSuite(ExpectedIOTest.class);
-    // suite.addTestSuite(RollingLogTest.class);
-    // suite.addTestSuite(Bugzilla_262875_Test.class);
+    suite.addTestSuite(UUIDGeneratorTest.class);
+    suite.addTestSuite(MultiMapTest.class);
+    suite.addTestSuite(SortedFileMapTest.class);
+    suite.addTestSuite(SynchronizingCorrelatorTest.class);
+    suite.addTestSuite(BufferPoolTest.class);
+    suite.addTestSuite(ExtendedIOTest.class);
+    suite.addTestSuite(StringCompressorTest.class);
+    suite.addTestSuite(SecurityTest.class);
+    suite.addTestSuite(ExecutorWorkSerializerTest.class);
+    suite.addTestSuite(RoundRobinBlockingQueueTest.class);
+    suite.addTestSuite(ExpectedIOTest.class);
+    suite.addTestSuite(RollingLogTest.class);
+    suite.addTestSuite(Bugzilla_262875_Test.class);
 
     // Config tests
+    suite.addTestSuite(NegotiationTest.class);
+    suite.addTestSuite(AcceptorTest.class);
     suite.addTestSuite(ChannelTest.class);
-    suite.addTestSuite(TCPConnectorTest.class);
     suite.addTestSuite(TransportTest.class);
     suite.addTestSuite(SignalTest.class);
     suite.addTestSuite(SignalMonitorTest.class);

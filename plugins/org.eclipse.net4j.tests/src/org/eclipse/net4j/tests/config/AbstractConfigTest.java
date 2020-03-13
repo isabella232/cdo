@@ -14,12 +14,15 @@ import org.eclipse.net4j.Net4jUtil;
 import org.eclipse.net4j.acceptor.IAcceptor;
 import org.eclipse.net4j.connector.IConnector;
 import org.eclipse.net4j.connector.IServerConnector;
-import org.eclipse.net4j.tests.config.TestConfig.WS;
+import org.eclipse.net4j.tests.config.TestConfig.TCP;
 import org.eclipse.net4j.tests.signal.TestSignalProtocol;
 import org.eclipse.net4j.util.container.ContainerUtil;
 import org.eclipse.net4j.util.container.IManagedContainer;
 import org.eclipse.net4j.util.lifecycle.LifecycleUtil;
 import org.eclipse.net4j.util.tests.AbstractOMTest;
+
+import org.eclipse.spi.net4j.InternalAcceptor;
+import org.eclipse.spi.net4j.InternalConnector;
 
 /**
  * @author Eike Stepper
@@ -33,9 +36,9 @@ public abstract class AbstractConfigTest extends AbstractOMTest
   // SSL, the server and client need separate container in order to operate handshake.
   protected IManagedContainer connectorContainer;
 
-  protected IAcceptor acceptor;
+  protected InternalAcceptor acceptor;
 
-  protected IConnector connector;
+  protected InternalConnector connector;
 
   protected AbstractConfigTest()
   {
@@ -43,7 +46,7 @@ public abstract class AbstractConfigTest extends AbstractOMTest
 
   protected TestConfig.Factory getDefaultFactory()
   {
-    return new WS();
+    return new TCP();
   }
 
   public TestConfig getConfig()
@@ -135,9 +138,14 @@ public abstract class AbstractConfigTest extends AbstractOMTest
 
   protected IAcceptor getAcceptor()
   {
+    return getAcceptor(true);
+  }
+
+  protected IAcceptor getAcceptor(boolean activate)
+  {
     if (acceptor == null)
     {
-      acceptor = config.getAcceptor(acceptorContainer);
+      acceptor = (InternalAcceptor)config.getAcceptor(acceptorContainer, activate);
     }
 
     return acceptor;
@@ -145,9 +153,14 @@ public abstract class AbstractConfigTest extends AbstractOMTest
 
   protected IConnector getConnector()
   {
+    return getConnector(true);
+  }
+
+  protected IConnector getConnector(boolean activate)
+  {
     if (connector == null)
     {
-      connector = config.getConnector(connectorContainer);
+      connector = (InternalConnector)config.getConnector(connectorContainer, activate);
     }
 
     return connector;

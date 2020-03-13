@@ -16,15 +16,19 @@ import org.eclipse.net4j.channel.ChannelException;
 import org.eclipse.net4j.connector.ConnectorException;
 import org.eclipse.net4j.internal.ws.WSAcceptor;
 import org.eclipse.net4j.internal.ws.WSAcceptorManager;
+import org.eclipse.net4j.internal.ws.WSClientConnector;
 import org.eclipse.net4j.internal.ws.WSConnector;
 import org.eclipse.net4j.internal.ws.bundle.OM;
 import org.eclipse.net4j.protocol.IProtocol;
-import org.eclipse.net4j.util.HexUtil;
+import org.eclipse.net4j.util.concurrent.ConcurrencyUtil;
 import org.eclipse.net4j.util.concurrent.ISynchronizer;
 import org.eclipse.net4j.util.concurrent.SynchronizingCorrelator;
 import org.eclipse.net4j.util.concurrent.TimeoutRuntimeException;
 import org.eclipse.net4j.util.om.OMPlatform;
 import org.eclipse.net4j.util.om.trace.ContextTracer;
+import org.eclipse.net4j.util.security.INegotiationContext;
+import org.eclipse.net4j.util.security.INegotiationContext.Receiver;
+import org.eclipse.net4j.util.security.NegotiationException;
 import org.eclipse.net4j.ws.IWSConnector;
 
 import org.eclipse.jetty.websocket.api.Session;
@@ -37,31 +41,23 @@ import java.nio.ByteBuffer;
 import java.text.MessageFormat;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * @author Eike Stepper
  */
 public class Net4jWebSocket implements WebSocketListener
 {
+  public static final short CONTROL_CHANNEL_ID = 0;
+
+  public static final byte OPCODE_NEGOTIATION = 1;
+
+  public static final byte OPCODE_REGISTRATION = 2;
+
+  public static final byte OPCODE_REGISTRATION_ACK = 3;
+
+  public static final byte OPCODE_DEREGISTRATION = 4;
+
   private static final long SESSION_IDLE_TIMEOUT = OMPlatform.INSTANCE.getProperty("org.eclipse.net4j.ws.jetty.Net4jWebSocket.sessionIdleTimeout", 30000);
-
-  private static final String MAGIC_PREFIX = HexUtil.bytesToHex("stepper".getBytes());
-
-  private static final int MAGIC_PREFIX_LENGTH = MAGIC_PREFIX.length();
-
-  private static final byte OPCODE_NEGOTIATION = 1;
-
-  private static final byte OPCODE_REGISTRATION = 2;
-
-  private static final byte OPCODE_REGISTRATION_ACK = 3;
-
-  private static final byte OPCODE_DEREGISTRATION = 4;
-
-  private static final Pattern REGISTRATION_PATTERN = Pattern.compile("([^|]+)\\|([^|]+)\\|(.*)");
-
-  private static final Pattern REGISTRATION_ACK_PATTERN = Pattern.compile("([^|]+)\\|(.*)");
 
   private static final ContextTracer TRACER = new ContextTracer(OM.DEBUG, Net4jWebSocket.class);
 
@@ -71,10 +67,6 @@ public class Net4jWebSocket implements WebSocketListener
    * Has next to no impact on performance.
    */
   private static final boolean ASYNC = true;
-
-  private static final boolean TEXT = false;
-
-  private static final short CONTROL_CHANNEL_INDEX = 0;
 
   private static Timer timer;
 
@@ -88,10 +80,16 @@ public class Net4jWebSocket implements WebSocketListener
 
   private TimerTask pongTask;
 
+  /**
+   * Called by {@link Net4jWebSocketServlet}.
+   */
   public Net4jWebSocket()
   {
   }
 
+  /**
+   * Called by {@link WSClientConnector}.
+   */
   public Net4jWebSocket(IWSConnector connector)
   {
     this.connector = (WSConnector)connector;
@@ -143,6 +141,7 @@ public class Net4jWebSocket implements WebSocketListener
       };
 
       acquireTimer().scheduleAtFixedRate(pongTask, 20000, 20000);
+      connector.leaveConnecting();
     }
     else
     {
@@ -223,32 +222,6 @@ public class Net4jWebSocket implements WebSocketListener
     }
   }
 
-  private synchronized void sendString(String message) throws IOException
-  {
-    if (ASYNC)
-    {
-      session.getRemote().sendString(message, new WriteCallback()
-      {
-        @Override
-        public void writeSuccess()
-        {
-          // Do nothing.
-        }
-
-        @Override
-        public void writeFailed(Throwable ex)
-        {
-          OM.LOG.error(ex);
-          // TODO Close the channel?
-        }
-      });
-    }
-    else
-    {
-      session.getRemote().sendString(message);
-    }
-  }
-
   private synchronized void sendBytes(IBuffer buffer) throws IOException
   {
     ByteBuffer byteBuffer = buffer.getByteBuffer();
@@ -268,7 +241,7 @@ public class Net4jWebSocket implements WebSocketListener
         {
           OM.LOG.error(ex);
           buffer.release();
-          // TODO Close the channel?
+          connector.deactivate();
         }
       });
     }
@@ -292,20 +265,13 @@ public class Net4jWebSocket implements WebSocketListener
     int protocolVersion = Net4jUtil.getProtocolVersion(protocol);
     String protocolID = Net4jUtil.getProtocolID(protocol);
 
-    if (TEXT)
-    {
-      sendString(MAGIC_PREFIX + OPCODE_REGISTRATION + channelID + "|" + protocolVersion + "|" + protocolID);
-    }
-    else
-    {
-      IBuffer buffer = provideBuffer();
-      ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_INDEX);
-      byteBuffer.put(OPCODE_REGISTRATION);
-      byteBuffer.putShort(channelID);
-      byteBuffer.putInt(protocolVersion);
-      org.eclipse.internal.net4j.buffer.BufferUtil.putString(byteBuffer, protocolID, false);
-      sendBuffer(buffer);
-    }
+    IBuffer buffer = provideBuffer();
+    ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_ID);
+    byteBuffer.put(OPCODE_REGISTRATION);
+    byteBuffer.putShort(channelID);
+    byteBuffer.putInt(protocolVersion);
+    org.eclipse.internal.net4j.buffer.BufferUtil.putString(byteBuffer, protocolID, false);
+    sendBuffer(buffer);
 
     String error = acknowledgement.get(timeout);
     if (error == null)
@@ -352,26 +318,12 @@ public class Net4jWebSocket implements WebSocketListener
 
   private void acknowledgeRegistration(short channelID, String error)
   {
-    try
-    {
-      if (TEXT)
-      {
-        sendString(MAGIC_PREFIX + OPCODE_REGISTRATION_ACK + channelID + "|" + error);
-      }
-      else
-      {
-        IBuffer buffer = provideBuffer();
-        ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_INDEX);
-        byteBuffer.put(OPCODE_REGISTRATION_ACK);
-        byteBuffer.putShort(channelID);
-        org.eclipse.internal.net4j.buffer.BufferUtil.putString(byteBuffer, error, true);
-        sendBuffer(buffer);
-      }
-    }
-    catch (IOException ex)
-    {
-      ex.printStackTrace();
-    }
+    IBuffer buffer = provideBuffer();
+    ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_ID);
+    byteBuffer.put(OPCODE_REGISTRATION_ACK);
+    byteBuffer.putShort(channelID);
+    org.eclipse.internal.net4j.buffer.BufferUtil.putString(byteBuffer, error, true);
+    sendBuffer(buffer);
   }
 
   private void onRegistrationAck(short channelID, String error)
@@ -402,18 +354,11 @@ public class Net4jWebSocket implements WebSocketListener
 
     assertValidChannelID(channelID);
 
-    if (TEXT)
-    {
-      sendString(MAGIC_PREFIX + OPCODE_DEREGISTRATION + channelID);
-    }
-    else
-    {
-      IBuffer buffer = provideBuffer();
-      ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_INDEX);
-      byteBuffer.put(OPCODE_DEREGISTRATION);
-      byteBuffer.putShort(channelID);
-      sendBuffer(buffer);
-    }
+    IBuffer buffer = provideBuffer();
+    ByteBuffer byteBuffer = buffer.startPutting(CONTROL_CHANNEL_ID);
+    byteBuffer.put(OPCODE_DEREGISTRATION);
+    byteBuffer.putShort(channelID);
+    sendBuffer(buffer);
   }
 
   private void onDeregistration(short channelID)
@@ -477,7 +422,8 @@ public class Net4jWebSocket implements WebSocketListener
     }
   }
 
-  private void onReceiveBuffer(byte[] payload, int offset, int len)
+  @Override
+  public void onWebSocketBinary(byte[] payload, int offset, int len)
   {
     if (len < IBuffer.HEADER_SIZE)
     {
@@ -501,7 +447,7 @@ public class Net4jWebSocket implements WebSocketListener
 
     short channelID = byteBuffer.getShort();
 
-    if (!TEXT && channelID == CONTROL_CHANNEL_INDEX)
+    if (channelID == CONTROL_CHANNEL_ID)
     {
       byteBuffer.position(IBuffer.HEADER_SIZE);
 
@@ -510,6 +456,22 @@ public class Net4jWebSocket implements WebSocketListener
         byte opcode = byteBuffer.get();
         switch (opcode)
         {
+        case OPCODE_NEGOTIATION:
+        {
+          assertNegotiating();
+
+          INegotiationContext negotiationContext = connector.getNegotiationContext();
+          while (negotiationContext == null)
+          {
+            ConcurrencyUtil.sleep(20);
+            negotiationContext = connector.getNegotiationContext();
+          }
+
+          Receiver receiver = negotiationContext.getReceiver();
+          receiver.receiveBuffer(negotiationContext, buffer.getByteBuffer());
+          break;
+        }
+
         case OPCODE_REGISTRATION:
         {
           channelID = buffer.getShort();
@@ -537,6 +499,12 @@ public class Net4jWebSocket implements WebSocketListener
         default:
           break;
         }
+      }
+      catch (NegotiationException ex)
+      {
+        OM.LOG.error(ex);
+        connector.setNegotiationException(ex);
+        connector.deactivate();
       }
       finally
       {
@@ -575,80 +543,18 @@ public class Net4jWebSocket implements WebSocketListener
   @Override
   public void onWebSocketText(String message)
   {
-    if (!TEXT)
-    {
-      return;
-    }
-
-    if (message.length() < MAGIC_PREFIX_LENGTH + 1 || !message.startsWith(MAGIC_PREFIX))
-    {
-      return;
-    }
-
-    char opcode = message.charAt(MAGIC_PREFIX_LENGTH);
-    message = message.substring(MAGIC_PREFIX_LENGTH + 1);
-
-    switch (opcode)
-    {
-    case '0' + OPCODE_NEGOTIATION:
-      onNegotiation(message);
-      break;
-
-    case '0' + OPCODE_REGISTRATION:
-    {
-      Matcher matcher = REGISTRATION_PATTERN.matcher(message);
-      if (!matcher.matches())
-      {
-        throw new IllegalArgumentException("Invalid channel registration message: " + message);
-      }
-
-      short channelID = Short.parseShort(matcher.group(1));
-      int protocolVersion = Integer.parseInt(matcher.group(2));
-      String protocolID = matcher.group(3);
-      onRegistration(channelID, protocolVersion, protocolID);
-      break;
-    }
-
-    case '0' + OPCODE_REGISTRATION_ACK:
-    {
-      Matcher matcher = REGISTRATION_ACK_PATTERN.matcher(message);
-      if (!matcher.matches())
-      {
-        throw new IllegalArgumentException("Invalid channel registration ack message: " + message);
-      }
-
-      short channelID = Short.parseShort(matcher.group(1));
-      String error = matcher.group(2);
-      onRegistrationAck(channelID, error);
-      break;
-    }
-
-    case '0' + OPCODE_DEREGISTRATION:
-    {
-      short channelID = Short.parseShort(message);
-      onDeregistration(channelID);
-      break;
-    }
-
-    default:
-      break;
-    }
-  }
-
-  @Override
-  public void onWebSocketBinary(byte[] payload, int offset, int len)
-  {
-    onReceiveBuffer(payload, offset, len);
+    // Do nothing.
   }
 
   @Override
   public void onWebSocketError(Throwable cause)
   {
-    cause.printStackTrace();
-  }
+    OM.LOG.error(cause);
 
-  private void onNegotiation(String message)
-  {
+    if (connector != null)
+    {
+      connector.deactivate();
+    }
   }
 
   private void assertNegotiating()
@@ -676,7 +582,7 @@ public class Net4jWebSocket implements WebSocketListener
     }
   }
 
-  protected IBuffer provideBuffer()
+  private IBuffer provideBuffer()
   {
     return connector.getConfig().getBufferProvider().provideBuffer();
   }
